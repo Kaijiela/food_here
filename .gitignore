@@ -1,0 +1,24 @@
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+
+# Local configuration and secrets
+Config/Secrets.xcconfig
+*.env
+.env.*
+
+# Local tooling/state
+.agents/
+.superpowers/
+tools/*.exe
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
