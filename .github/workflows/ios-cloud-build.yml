@@ -46,9 +46,25 @@ jobs:
             -scheme FoodMap \
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
+            -derivedDataPath build/DerivedData \
             CODE_SIGNING_ALLOWED=NO \
             GOOGLE_MAPS_API_KEY="$BUILD_GOOGLE_MAPS_API_KEY" \
             build | tee xcodebuild.log
+
+      - name: Package simulator app
+        run: |
+          APP_PATH="$(find build/DerivedData/Build/Products/Debug-iphonesimulator -name 'FoodMap.app' -type d | head -n 1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "FoodMap.app was not found in DerivedData."
+            exit 1
+          fi
+          ditto -c -k --keepParent "$APP_PATH" FoodMap-simulator-app.zip
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: FoodMap-simulator-app
+          path: FoodMap-simulator-app.zip
 
       - name: Upload xcodebuild log
         if: always()
