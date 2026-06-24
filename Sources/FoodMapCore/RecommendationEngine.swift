@@ -45,11 +45,11 @@ public struct RecommendationEngine: Sendable {
         let openScore: Double
 
         switch restaurant.isOpenNow {
-        case true:
+        case .some(true):
             openScore = 1.0
-        case false:
+        case .some(false):
             openScore = -0.75
-        case nil:
+        case .none:
             openScore = 0.2
         }
 
