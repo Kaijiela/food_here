@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 45
 
     env:
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY || 'DUMMY_KEY_FOR_BUILD' }}
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
 
     steps:
       - name: Checkout
@@ -38,6 +38,8 @@ jobs:
             -resolvePackageDependencies
 
       - name: Build iOS app for simulator
+        env:
+          BUILD_GOOGLE_MAPS_API_KEY: ${{ env.GOOGLE_MAPS_API_KEY != '' && env.GOOGLE_MAPS_API_KEY || 'DUMMY_KEY_FOR_BUILD' }}
         run: |
           xcodebuild \
             -project FoodMap.xcodeproj \
@@ -45,7 +47,7 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
-            GOOGLE_MAPS_API_KEY="$GOOGLE_MAPS_API_KEY" \
+            GOOGLE_MAPS_API_KEY="$BUILD_GOOGLE_MAPS_API_KEY" \
             build | tee xcodebuild.log
 
       - name: Upload xcodebuild log
