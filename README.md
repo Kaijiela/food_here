@@ -22,9 +22,26 @@ http://localhost:5173
 
 ## 外網部署
 
-這個分支包含 GitHub Pages workflow：`.github/workflows/web-preview-pages.yml`。
+這個分支包含 GitHub Pages workflow：
 
-推送 `codex/web-gps-google-maps` 分支後，GitHub Actions 會把 `web-preview` 部署成 HTTPS 靜態網站。HTTPS 是瀏覽器 GPS 定位的必要條件之一；`localhost` 也可以測試定位，但手機或外部裝置需要 HTTPS 網址。
+```text
+.github/workflows/web-preview-pages.yml
+```
+
+第一次部署前，repository owner 需要先到 GitHub 開啟 Pages：
+
+1. 打開 repository 的 `Settings > Pages`
+2. 在 `Build and deployment` 的 `Source` 選擇 `GitHub Actions`
+3. 儲存後重新執行 `Deploy Web Preview to GitHub Pages` workflow
+
+如果沒有先做這一步，Actions 會在 `Setup Pages` 出現類似錯誤：
+
+```text
+Error: Get Pages site failed.
+HttpError: Not Found
+```
+
+這代表 GitHub Pages site 尚未建立，不是 web app build 壞掉。
 
 部署完成後，網址通常會是：
 
@@ -32,7 +49,7 @@ http://localhost:5173
 https://kaijiela.github.io/food_here/
 ```
 
-如果 GitHub Pages 尚未啟用，請到 repository 的 Settings > Pages，將 Source 設為 GitHub Actions。
+HTTPS 是瀏覽器 GPS 定位的必要條件之一；`localhost` 也可以測試定位，但手機或外部裝置需要 HTTPS 網址。
 
 ## Google Maps / Places 設定
 
