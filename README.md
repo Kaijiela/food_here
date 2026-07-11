@@ -1,57 +1,45 @@
 # 美食地圖
 
-美食地圖是 iOS 原生 MVP，目標是讓有選擇障礙的人在新竹市附近快速找到餐廳。
+美食地圖原本是 iOS 原生 MVP，現在專案方向調整為 Web App，讓沒有 macOS / Xcode 環境時也能在 Windows 上快速預覽、測試和迭代。
 
-## 開發環境
+核心目標不變：幫有選擇障礙的人，在新竹市附近快速找到今天可以吃的餐廳。
 
-- iOS 16+
-- Xcode 16+ 建議
-- Swift Package Manager
-- Google Maps Platform 專案需啟用 Maps SDK for iOS 與 Places SDK for iOS
+## 目前主力版本
 
-## 設定 API Key
-
-1. 複製 `Config/Secrets.xcconfig.example` 為 `Config/Secrets.xcconfig`。
-2. 將 `GOOGLE_MAPS_API_KEY` 設為 Google Cloud Console 建立的 iOS API key。
-3. 在 Google Cloud Console 將 key 限制到 app bundle identifier：`com.example.foodmap`，或改成你的正式 bundle identifier。
-4. 在 Xcode 專案 Build Settings 將 Debug/Release 的 `GOOGLE_MAPS_API_KEY` 指向這個值，或直接在 scheme 加入 build setting。
-
-## 驗證
-
-核心邏輯可在有 Swift toolchain 的環境執行：
-
-```bash
-swift test
-```
-
-Windows 若使用本專案安裝的 Swift 6.3.2，可執行：
+Web App 位於 `web-preview`：
 
 ```powershell
-.\Scripts\Test-Core.ps1
+cd D:\food_here\web-preview
+npm.cmd test
+npm.cmd start
 ```
 
-iOS App 需要在 macOS/Xcode 執行：
+開啟：
 
-```bash
-xcodebuild -project FoodMap.xcodeproj -scheme FoodMap -destination 'platform=iOS Simulator,name=iPhone 16' build
+```text
+http://localhost:5173
 ```
 
-## GitHub Actions 雲端 Build
+## Web App 功能
 
-本專案已包含 `.github/workflows/ios-cloud-build.yml`。推到 GitHub 後可以到 Actions 手動執行 **iOS Cloud Build**，或在 push / pull request 時自動執行。
+- 根據評分、評論量、距離與營業狀態排序推薦
+- 搜尋店名、餐點、分類與標籤
+- 類型篩選與「只看營業中」
+- 最佳推薦卡、附近地圖示意、推薦清單、店家詳情
+- 使用假資料，方便先驗證產品流程，不需要 Google API key
 
-如果要用真實 Google key 編譯，請在 GitHub repo 設定：
+## 專案結構
 
-1. Settings > Secrets and variables > Actions
-2. 新增 Repository secret：`GOOGLE_MAPS_API_KEY`
-3. 重新執行 workflow
+```text
+web-preview/              Web App MVP
+Sources/FoodMapCore/      原 Swift 核心邏輯參考
+FoodMap/                  原 iOS App 程式碼參考
+Tests/                    原 Swift 測試
+```
 
-沒有設定 secret 時，workflow 會用 `DUMMY_KEY_FOR_BUILD` 做編譯檢查；App 不能用這個 dummy key 實際載入地圖。
+## 後續方向
 
-## 功能範圍
-
-- CoreLocation 定位，定位拒絕時 fallback 到新竹市中心。
-- Google Places Nearby Search 搜尋餐廳與咖啡店。
-- 推薦引擎依評分、評論數、距離、營業狀態加權。
-- Google Maps 顯示目前推薦與附近餐廳 pin。
-- 餐廳詳情顯示照片、評價摘要、營業時間與 Google Maps 導航連結。
+1. 將 `web-preview/src/restaurants.mjs` 換成後端或 Google Places Web Service 回傳資料。
+2. 用 Google Maps JavaScript API 替換目前的地圖示意。
+3. 加入瀏覽器定位授權，定位失敗時 fallback 到新竹市中心。
+4. 視需求再決定是否保留、封存或移除 iOS 專案檔。
