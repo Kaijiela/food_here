@@ -2,7 +2,7 @@
 
 美食地圖原本是 iOS 原生 MVP，現在專案方向調整為 Web App，讓沒有 macOS / Xcode 環境時也能在 Windows 上快速預覽、測試和迭代。
 
-核心目標不變：幫有選擇障礙的人，在新竹市附近快速找到今天可以吃的餐廳。
+核心目標不變：幫有選擇障礙的人，在附近快速找到今天可以吃的餐廳。
 
 ## 目前主力版本
 
@@ -14,19 +14,48 @@ npm.cmd test
 npm.cmd start
 ```
 
-開啟：
+本機預覽：
 
 ```text
 http://localhost:5173
 ```
 
+## 外網部署
+
+這個分支包含 GitHub Pages workflow：`.github/workflows/web-preview-pages.yml`。
+
+推送 `codex/web-gps-google-maps` 分支後，GitHub Actions 會把 `web-preview` 部署成 HTTPS 靜態網站。HTTPS 是瀏覽器 GPS 定位的必要條件之一；`localhost` 也可以測試定位，但手機或外部裝置需要 HTTPS 網址。
+
+部署完成後，網址通常會是：
+
+```text
+https://kaijiela.github.io/food_here/
+```
+
+如果 GitHub Pages 尚未啟用，請到 repository 的 Settings > Pages，將 Source 設為 GitHub Actions。
+
+## Google Maps / Places 設定
+
+Web App 不會把 Google Maps API key 寫進程式碼。請在畫面上貼入 browser API key；它只會存在你的瀏覽器 `localStorage`。
+
+Google Cloud Console 建議設定：
+
+- 啟用 Maps JavaScript API
+- 啟用 Places API
+- API key 類型使用 browser key
+- Application restrictions 設為 HTTP referrers
+- 開發時允許 `http://localhost:5173/*`
+- 外網測試時允許 `https://kaijiela.github.io/food_here/*`
+
 ## Web App 功能
 
+- 使用瀏覽器 Geolocation 取得 GPS 位置
+- 設定 Google Maps API key 後呼叫 Google Places Nearby Search
+- Google Places 失敗或尚未設定 key 時，自動 fallback 到 MVP 假資料
 - 根據評分、評論量、距離與營業狀態排序推薦
 - 搜尋店名、餐點、分類與標籤
 - 類型篩選與「只看營業中」
 - 最佳推薦卡、附近地圖示意、推薦清單、店家詳情
-- 使用假資料，方便先驗證產品流程，不需要 Google API key
 
 ## 專案結構
 
@@ -36,10 +65,3 @@ Sources/FoodMapCore/      原 Swift 核心邏輯參考
 FoodMap/                  原 iOS App 程式碼參考
 Tests/                    原 Swift 測試
 ```
-
-## 後續方向
-
-1. 將 `web-preview/src/restaurants.mjs` 換成後端或 Google Places Web Service 回傳資料。
-2. 用 Google Maps JavaScript API 替換目前的地圖示意。
-3. 加入瀏覽器定位授權，定位失敗時 fallback 到新竹市中心。
-4. 視需求再決定是否保留、封存或移除 iOS 專案檔。

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   distanceMeters,
+  locationLabel,
   nextRecommendation,
   rankRestaurants,
   restaurantById
@@ -49,5 +50,7 @@ assert.equal(nextRecommendation(restaurants, userLocation, new Set(restaurants.m
 
 assert.equal(restaurantById(restaurants, "closed").name, "打烊美食");
 assert.equal(restaurantById(restaurants, "missing"), null);
+assert.equal(locationLabel({ lat: 24.8016, lng: 120.9714, label: "目前位置" }), "目前位置");
+assert.equal(locationLabel({ lat: 24.8016, lng: 120.9714 }), "24.80160, 120.97140");
 
 console.log("foodMapLogic tests passed");

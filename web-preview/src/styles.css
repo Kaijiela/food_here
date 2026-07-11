@@ -82,9 +82,9 @@ button {
   line-height: 1.7;
 }
 
-.search-panel {
+.setup-panel,
+.filter-card {
   display: grid;
-  grid-template-columns: 1fr 150px;
   gap: 12px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.92);
@@ -93,6 +93,46 @@ button {
   box-shadow: 0 12px 32px rgba(34, 42, 51, 0.08);
 }
 
+.setup-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setup-header h2 {
+  margin: 2px 0 0;
+  font-size: 26px;
+  letter-spacing: 0;
+}
+
+.status-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.status-stack p {
+  margin: 0;
+  padding: 11px 12px;
+  color: #465059;
+  background: var(--quiet);
+  border: 1px solid #e5e9e5;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.api-key-form {
+  display: grid;
+  gap: 10px;
+}
+
+.api-key-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.api-key-form span,
 .search-box,
 .select-box,
 .toggle-box {
@@ -100,6 +140,7 @@ button {
   gap: 7px;
 }
 
+.api-key-form label span,
 .search-box span,
 .select-box span {
   color: var(--muted);
@@ -107,6 +148,7 @@ button {
   font-weight: 800;
 }
 
+.api-key-form input,
 .search-box input,
 .select-box select {
   width: 100%;
@@ -119,11 +161,11 @@ button {
 }
 
 .search-box {
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .toggle-box {
-  grid-column: span 2;
+  grid-column: 1 / -1;
   grid-template-columns: 20px 1fr;
   align-items: center;
   min-height: 38px;
@@ -135,6 +177,10 @@ button {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
+}
+
+.filter-card {
+  grid-template-columns: 1fr 138px;
 }
 
 .dashboard {
@@ -281,6 +327,23 @@ button {
   font-weight: 900;
 }
 
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.compact {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .primary-button {
   color: #fff;
   background: var(--accent);
@@ -300,7 +363,8 @@ button {
 .map-section,
 .list-card,
 .detail-card,
-.empty-state {
+.empty-state,
+.filter-card {
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -590,7 +654,7 @@ button {
     font-size: 44px;
   }
 
-  .search-panel {
+  .filter-card {
     grid-template-columns: 1fr;
   }
 
@@ -632,7 +696,8 @@ button {
   .map-section,
   .list-card,
   .detail-card,
-  .empty-state {
+  .empty-state,
+  .filter-card {
     border-right: 0;
     border-left: 0;
     border-radius: 0;

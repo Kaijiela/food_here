@@ -26,6 +26,11 @@ export function restaurantById(restaurants, id) {
   return restaurants.find((restaurant) => restaurant.id === id) ?? null;
 }
 
+export function locationLabel(location) {
+  if (location.label) return location.label;
+  return `${location.lat.toFixed(5)}, ${location.lng.toFixed(5)}`;
+}
+
 export function score(restaurant, userLocation) {
   const distance = distanceMeters(userLocation, { lat: restaurant.lat, lng: restaurant.lng });
   const ratingScore = ((restaurant.rating ?? 3.5) - 3) / 2;
