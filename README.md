@@ -43,6 +43,8 @@ HttpError: Not Found
 
 這代表 GitHub Pages site 尚未建立，不是 web app build 壞掉。
 
+這條開發分支的 workflow 使用 `github-pages-preview` environment，避免被正式 `github-pages` environment 的 branch 保護規則擋住。如果你想改回使用正式 `github-pages` environment，請到 repository 的 `Settings > Environments > github-pages`，把 `codex/web-gps-google-maps` 加到允許部署的 branches。
+
 部署完成後，網址通常會是：
 
 ```text
