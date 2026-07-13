@@ -3,6 +3,7 @@ name: Deploy Web Preview to GitHub Pages
 on:
   push:
     branches:
+      - main
       - codex/web-gps-google-maps
   workflow_dispatch:
 
@@ -18,7 +19,7 @@ concurrency:
 jobs:
   deploy:
     environment:
-      name: github-pages-preview
+      name: ${{ github.ref_name == 'main' && 'github-pages' || 'github-pages-preview' }}
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
