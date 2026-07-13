@@ -43,7 +43,8 @@ const state = {
     : "設定 Google Maps API key 後會顯示真正的 Google Map。",
   isLocating: false,
   isSearchingPlaces: false,
-  apiKeyDraft: ""
+  apiKeyDraft: "",
+  photoViewer: null
 };
 
 let mapRenderToken = 0;
@@ -282,15 +283,14 @@ function render() {
 
     <section class="dashboard">
       <div class="main-column">
-        ${selected ? recommendationTemplate(selected) : emptyTemplate()}
+        ${selected ? recommendationTemplate(state.detail ?? selected) : emptyTemplate()}
         ${mapTemplate(selected, candidates)}
-      </div>
-      <aside class="side-column">
         ${filterTemplate()}
         ${nearbyTemplate(candidates, selected)}
-        ${detailTemplate(state.detail ?? selected)}
-      </aside>
+      </div>
     </section>
+
+    ${photoViewerTemplate()}
   `;
 
   bindEvents();
@@ -360,10 +360,34 @@ function filterTemplate() {
 function recommendationTemplate(restaurant) {
   const restaurantScore = Math.round(score(restaurant, state.userLocation) * 100);
   const openLabel = restaurant.open === true ? "營業中" : restaurant.open === false ? "目前休息" : "營業狀態未知";
+  const photos = restaurant.photos?.length ? restaurant.photos : [restaurant.image].filter(Boolean);
+  const reviews = restaurant.reviewItems?.length
+    ? restaurant.reviewItems
+    : restaurant.review
+      ? [{
+          id: `${restaurant.id}-sample-review`,
+          author: restaurant.review.author,
+          rating: restaurant.review.rating,
+          time: restaurant.review.time,
+          text: restaurant.review.text
+        }]
+      : [];
+  const mapsUrl = buildGoogleMapsUrl(restaurant);
 
   return `
     <article class="recommendation-card">
-      <img src="${escapeHtml(restaurant.image)}" alt="${escapeHtml(restaurant.name)} 招牌餐點" />
+      <div class="recommendation-photo-panel">
+        <button class="photo-button primary-photo" type="button" data-photo="${escapeHtml(restaurant.image)}" data-photo-alt="${escapeHtml(restaurant.name)} 主照片">
+          <img src="${escapeHtml(restaurant.image)}" alt="${escapeHtml(restaurant.name)} 招牌餐點" />
+        </button>
+        <div class="photo-strip compact-photos" aria-label="${escapeHtml(restaurant.name)} 照片">
+          ${photos.map((photo, index) => `
+            <button class="photo-button" type="button" data-photo="${escapeHtml(photo)}" data-photo-alt="${escapeHtml(restaurant.name)} 照片 ${index + 1}">
+              <img src="${escapeHtml(photo)}" alt="${escapeHtml(restaurant.name)} 照片 ${index + 1}" />
+            </button>
+          `).join("")}
+        </div>
+      </div>
       <div class="recommendation-content">
         <div class="section-title">
           <span>最佳推薦</span>
@@ -385,8 +409,25 @@ function recommendationTemplate(restaurant) {
         <div class="tag-row">
           ${(restaurant.tags ?? []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
         </div>
+        ${restaurant.detailLoading ? `<p class="detail-status">正在載入 Google Place Details...</p>` : ""}
+        ${restaurant.detailError ? `<p class="detail-error">${escapeHtml(restaurant.detailError)}</p>` : ""}
+        <div class="detail-info">
+          <p>${escapeHtml(restaurant.address ?? restaurant.signature ?? "Google 尚未提供地址。")}</p>
+          ${restaurant.phone ? `<a href="tel:${escapeHtml(restaurant.phone)}">${escapeHtml(restaurant.phone)}</a>` : ""}
+          ${restaurant.website ? `<a href="${escapeHtml(restaurant.website)}" target="_blank" rel="noopener noreferrer">官方網站</a>` : ""}
+          <a href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">在 Google Maps 開啟</a>
+        </div>
+        <div class="review-heading">
+          <h4>Google 最相關評論，最多 5 則</h4>
+          <span>Place Details 回傳限制</span>
+        </div>
+        <div class="review-list">
+          ${reviews.length
+            ? reviews.map(reviewTemplate).join("")
+            : `<p class="empty-copy">Google 目前沒有提供可顯示評論。</p>`}
+        </div>
         <div class="actions">
-          <button class="primary-button" id="accept" type="button">查看店家</button>
+          <button class="primary-button" id="open-maps" type="button">開啟 Google Maps</button>
           <button class="secondary-button" id="shuffle" type="button">換一間</button>
         </div>
       </div>
@@ -517,6 +558,17 @@ function reviewTemplate(review) {
   `;
 }
 
+function photoViewerTemplate() {
+  if (!state.photoViewer) return "";
+
+  return `
+    <div class="photo-viewer" id="photo-viewer" role="dialog" aria-modal="true" aria-label="照片全圖">
+      <button class="photo-viewer-close" id="photo-viewer-close" type="button" aria-label="關閉照片">×</button>
+      <img src="${escapeHtml(state.photoViewer.url)}" alt="${escapeHtml(state.photoViewer.alt)}" />
+    </div>
+  `;
+}
+
 function emptyTemplate() {
   return `
     <section class="empty-state">
@@ -528,8 +580,9 @@ function emptyTemplate() {
 
 function bindEvents() {
   document.querySelector("#shuffle")?.addEventListener("click", shuffleRecommendation);
-  document.querySelector("#accept")?.addEventListener("click", () => {
-    if (state.selected) selectRestaurant(state.selected.id);
+  document.querySelector("#open-maps")?.addEventListener("click", () => {
+    const restaurant = state.detail ?? state.selected;
+    if (restaurant) window.open(buildGoogleMapsUrl(restaurant), "_blank", "noopener,noreferrer");
   });
   document.querySelector("#locate")?.addEventListener("click", requestBrowserLocation);
   document.querySelector("#use-sample")?.addEventListener("click", useSampleData);
@@ -555,6 +608,25 @@ function bindEvents() {
   });
   document.querySelectorAll("[data-restaurant]").forEach((button) => {
     button.addEventListener("click", () => selectRestaurant(button.dataset.restaurant));
+  });
+  document.querySelectorAll("[data-photo]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.photoViewer = {
+        url: button.dataset.photo,
+        alt: button.dataset.photoAlt ?? "店家照片"
+      };
+      render();
+    });
+  });
+  document.querySelector("#photo-viewer-close")?.addEventListener("click", () => {
+    state.photoViewer = null;
+    render();
+  });
+  document.querySelector("#photo-viewer")?.addEventListener("click", (event) => {
+    if (event.target.id === "photo-viewer") {
+      state.photoViewer = null;
+      render();
+    }
   });
 }
 

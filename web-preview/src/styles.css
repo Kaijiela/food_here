@@ -25,6 +25,7 @@ body {
     linear-gradient(120deg, rgba(232, 66, 66, 0.08), transparent 34rem),
     linear-gradient(180deg, #f9faf7, #eef3ef);
   color: var(--ink);
+  overflow-x: hidden;
 }
 
 button,
@@ -185,7 +186,7 @@ button {
 
 .dashboard {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(360px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
 }
@@ -211,6 +212,52 @@ button {
   height: 100%;
   min-height: 430px;
   object-fit: cover;
+}
+
+.recommendation-photo-panel {
+  display: grid;
+  grid-template-rows: auto auto;
+  min-width: 0;
+  background: #f2f5f1;
+}
+
+.photo-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.photo-button img {
+  display: block;
+  width: 100%;
+  height: 112px;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+.photo-button:hover img {
+  transform: scale(1.025);
+}
+
+.primary-photo {
+  height: auto;
+  border-radius: 0;
+}
+
+.primary-photo img {
+  height: 430px;
+  min-height: 0;
+}
+
+.compact-photos {
+  margin: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .recommendation-content {
@@ -625,6 +672,45 @@ button {
   border-radius: 6px;
 }
 
+.review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.photo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(12, 18, 24, 0.86);
+}
+
+.photo-viewer img {
+  max-width: min(1100px, 100%);
+  max-height: 86vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+}
+
+.photo-viewer-close {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  font-size: 30px;
+  line-height: 1;
+}
+
 .detail-status,
 .detail-error {
   margin: 12px 0 0;
@@ -755,7 +841,6 @@ button {
   }
 
   .hero,
-  .dashboard,
   .recommendation-card {
     grid-template-columns: 1fr;
   }
@@ -777,9 +862,13 @@ button {
     grid-column: auto;
   }
 
-  .recommendation-card > img {
-    height: 260px;
-    min-height: 260px;
+  .recommendation-photo-panel {
+    grid-template-rows: auto auto;
+  }
+
+  .primary-photo img {
+    height: 300px;
+    min-height: 300px;
   }
 
   .map-canvas {
@@ -798,7 +887,38 @@ button {
   }
 
   .hero {
-    padding: 18px 14px 0;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 14px 12px 0;
+  }
+
+  .hero-copy {
+    padding: 0;
+  }
+
+  .hero h1 {
+    margin-top: 6px;
+    font-size: 31px;
+    line-height: 1.05;
+  }
+
+  .hero p {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .setup-panel,
+  .filter-card {
+    padding: 12px;
+  }
+
+  .setup-header h2 {
+    font-size: 22px;
+  }
+
+  .status-stack p {
+    padding: 9px 10px;
+    font-size: 12px;
   }
 
   .dashboard {
@@ -822,16 +942,56 @@ button {
   }
 
   .recommendation-content {
+    order: 1;
     padding: 20px 14px;
   }
 
+  .recommendation-photo-panel {
+    order: 2;
+  }
+
   .recommendation-content h2 {
-    font-size: 32px;
+    font-size: 28px;
+  }
+
+  .recommendation-content p {
+    font-size: 15px;
+  }
+
+  .primary-photo img {
+    height: 230px;
+    min-height: 230px;
+  }
+
+  .compact-photos {
+    grid-auto-columns: 108px;
+    padding: 8px 12px;
   }
 
   .metrics,
   .detail-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .metrics span,
+  .detail-grid span {
+    min-height: 62px;
+    padding: 10px;
+  }
+
+  .metrics b,
+  .detail-grid b {
+    font-size: 19px;
+  }
+
+  .review-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .google-map-canvas {
+    min-height: 260px;
   }
 
   .restaurant-row {
