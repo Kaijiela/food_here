@@ -14,6 +14,10 @@ import {
 } from "./googleMapsPlaces.mjs";
 import { restaurants as sampleRestaurants, userLocation as fallbackLocation } from "./restaurants.mjs";
 
+const TARGET_ACCURACY_METERS = 100;
+const MAX_SEARCH_ACCURACY_METERS = 1500;
+const LOCATION_WATCH_TIMEOUT_MS = 20000;
+
 const state = {
   source: "sample",
   restaurants: sampleRestaurants,
@@ -24,6 +28,7 @@ const state = {
   query: "",
   category: "全部",
   openOnly: false,
+  locationAccuracy: null,
   locationStatus: "尚未取得定位，先使用新竹市東區作為預設位置。",
   placesStatus: hasGoogleMapsApiKey()
     ? "已保存 Google Maps API key，可取得定位後搜尋附近餐廳。"
@@ -107,20 +112,25 @@ async function requestBrowserLocation() {
   }
 
   state.isLocating = true;
-  state.locationStatus = "正在向瀏覽器要求 GPS 權限...";
+  state.locationStatus = "正在向瀏覽器要求 GPS 權限，會等待最多 20 秒取得更精準的位置...";
   render();
 
   try {
-    const position = await getCurrentPosition();
+    const position = await getBestCurrentPosition();
+    const accuracy = Math.round(position.coords.accuracy);
+    state.locationAccuracy = accuracy;
     state.userLocation = {
       lat: position.coords.latitude,
       lng: position.coords.longitude,
-      label: "目前位置"
+      label: accuracy <= MAX_SEARCH_ACCURACY_METERS ? "目前位置" : "粗略位置"
     };
-    state.locationStatus = `已取得 GPS 位置，精準度約 ${Math.round(position.coords.accuracy)} 公尺。`;
+    state.locationStatus = accuracy <= MAX_SEARCH_ACCURACY_METERS
+      ? `已取得 GPS 位置，精準度約 ${accuracy} 公尺。`
+      : `目前只能取得約 ${accuracy} 公尺的粗略定位，還不適合搜尋附近餐廳；請確認手機定位/Wi-Fi 已開啟，或移到較空曠處再重試。`;
+
     refreshSelection();
 
-    if (hasGoogleMapsApiKey()) {
+    if (hasGoogleMapsApiKey() && canSearchWithCurrentLocation()) {
       await loadPlacesForCurrentLocation();
       return;
     }
@@ -155,6 +165,14 @@ async function saveApiKeyAndSearch(event) {
 }
 
 async function loadPlacesForCurrentLocation() {
+  if (!canSearchWithCurrentLocation()) {
+    state.placesStatus = state.locationAccuracy === null
+      ? "請先取得 GPS 位置，再搜尋 Google Places 附近餐廳。"
+      : `定位精準度約 ${state.locationAccuracy} 公尺，超過 ${MAX_SEARCH_ACCURACY_METERS} 公尺門檻，暫停 Google Places 搜尋以避免推薦到錯的區域。`;
+    render();
+    return;
+  }
+
   state.isSearchingPlaces = true;
   state.placesStatus = "正在呼叫 Google Places Nearby Search...";
   render();
@@ -245,7 +263,7 @@ function setupPanelTemplate() {
       </div>
 
       <button class="primary-button full-width" id="locate" type="button" ${state.isLocating ? "disabled" : ""}>
-        ${state.isLocating ? "取得定位中..." : "取得我的 GPS 位置"}
+        ${state.isLocating ? "正在等待更精準定位..." : "取得我的 GPS 位置"}
       </button>
 
       <form class="api-key-form" id="api-key-form">
@@ -463,17 +481,54 @@ function bindEvents() {
   });
 }
 
-function getCurrentPosition() {
+function getBestCurrentPosition() {
   return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
+    let bestPosition = null;
+    let settled = false;
+    let watchId = null;
+    let timeoutId = null;
+    const options = {
       enableHighAccuracy: true,
-      timeout: 12000,
-      maximumAge: 60000
-    });
+      timeout: LOCATION_WATCH_TIMEOUT_MS,
+      maximumAge: 0
+    };
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      callback(value);
+    };
+    timeoutId = window.setTimeout(() => {
+      if (bestPosition) {
+        finish(resolve, bestPosition);
+        return;
+      }
+      finish(reject, new Error("LOCATION_TIMEOUT"));
+    }, LOCATION_WATCH_TIMEOUT_MS);
+
+    watchId = navigator.geolocation.watchPosition((position) => {
+      if (!bestPosition || position.coords.accuracy < bestPosition.coords.accuracy) {
+        bestPosition = position;
+        state.locationStatus = `正在取得更精準定位，目前最佳精準度約 ${Math.round(position.coords.accuracy)} 公尺...`;
+        render();
+      }
+
+      if (position.coords.accuracy <= TARGET_ACCURACY_METERS) {
+        finish(resolve, position);
+      }
+    }, (error) => {
+      finish(reject, error);
+    }, options);
   });
 }
 
+function canSearchWithCurrentLocation() {
+  return state.locationAccuracy !== null && state.locationAccuracy <= MAX_SEARCH_ACCURACY_METERS;
+}
+
 function locationErrorMessage(error) {
+  if (error?.message === "LOCATION_TIMEOUT") return "20 秒內沒有取得可用定位，請確認定位服務、Wi-Fi 或行動網路後再試一次。";
   if (error?.code === 1) return "定位權限被拒絕，請在瀏覽器允許位置權限後再試一次。";
   if (error?.code === 2) return "目前無法取得位置，請確認裝置定位服務或網路狀態。";
   if (error?.code === 3) return "取得定位逾時，請再試一次。";
