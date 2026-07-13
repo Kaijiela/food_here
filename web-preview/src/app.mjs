@@ -7,8 +7,13 @@ import {
   score
 } from "./foodMapLogic.mjs";
 import {
+  buildGoogleMapsUrl,
+  fetchRestaurantDetail,
+  formatGooglePriceLevel,
   getStoredGoogleMapsApiKey,
   hasGoogleMapsApiKey,
+  mergeRestaurantDetail,
+  renderGoogleRestaurantMap,
   searchNearbyRestaurants,
   storeGoogleMapsApiKey
 } from "./googleMapsPlaces.mjs";
@@ -29,19 +34,25 @@ const state = {
   category: "全部",
   openOnly: false,
   locationAccuracy: null,
-  locationStatus: "尚未取得定位，先使用新竹市東區作為預設位置。",
+  locationStatus: "尚未取得定位，先使用新竹市中心作為預設位置。",
   placesStatus: hasGoogleMapsApiKey()
-    ? "已保存 Google Maps API key，可取得定位後搜尋附近餐廳。"
+    ? "已儲存 Google Maps API key，可取得定位後搜尋附近餐廳。"
     : "尚未設定 Google Maps API key，目前使用 MVP 假資料。",
+  mapStatus: hasGoogleMapsApiKey()
+    ? "正在準備 Google Map..."
+    : "設定 Google Maps API key 後會顯示真正的 Google Map。",
   isLocating: false,
   isSearchingPlaces: false,
   apiKeyDraft: ""
 };
 
+let mapRenderToken = 0;
+let detailRequestToken = 0;
 const app = document.querySelector("#app");
 
 function init() {
   state.apiKeyDraft = getStoredGoogleMapsApiKey();
+  state.restaurants = state.restaurants.map(normalizeRestaurant);
   state.selected = pickRecommendation(filteredRestaurants());
   state.detail = state.selected;
   render();
@@ -61,8 +72,9 @@ function filteredRestaurants() {
       restaurant.name,
       restaurant.category,
       restaurant.signature,
+      restaurant.address,
       ...(restaurant.tags ?? [])
-    ].join(" ").toLowerCase();
+    ].filter(Boolean).join(" ").toLowerCase();
     const matchesQuery = normalizedQuery.length === 0 || haystack.includes(normalizedQuery);
 
     return matchesCategory && matchesOpen && matchesQuery;
@@ -102,6 +114,41 @@ function selectRestaurant(id) {
   state.detail = restaurant;
   state.seen.add(restaurant.id);
   render();
+  void loadRestaurantDetail(restaurant);
+}
+
+async function loadRestaurantDetail(restaurant) {
+  if (!restaurant.placeId || !hasGoogleMapsApiKey()) return;
+  if (restaurant.reviewItems?.length || restaurant.phone || restaurant.website || restaurant.detailLoading) return;
+
+  const token = ++detailRequestToken;
+  state.detail = { ...restaurant, detailLoading: true, detailError: null };
+  state.selected = state.selected?.id === restaurant.id ? state.detail : state.selected;
+  state.restaurants = state.restaurants.map((item) => (
+    item.id === restaurant.id ? { ...item, detailLoading: true, detailError: null } : item
+  ));
+  render();
+
+  try {
+    const detail = await fetchRestaurantDetail(restaurant.placeId, state.userLocation);
+    if (token !== detailRequestToken || state.selected?.id !== restaurant.id) return;
+
+    const merged = mergeRestaurantDetail(state.restaurants, restaurant, detail);
+    state.restaurants = merged.restaurants;
+    state.selected = merged.selected;
+    state.detail = merged.detail;
+  } catch (error) {
+    if (token !== detailRequestToken || state.selected?.id !== restaurant.id) return;
+
+    const message = error instanceof Error ? error.message : "Google Place Details 載入失敗。";
+    state.detail = { ...restaurant, detailLoading: false, detailError: message };
+    state.selected = state.detail;
+    state.restaurants = state.restaurants.map((item) => (
+      item.id === restaurant.id ? { ...item, detailLoading: false, detailError: message } : item
+    ));
+  } finally {
+    render();
+  }
 }
 
 async function requestBrowserLocation() {
@@ -112,7 +159,7 @@ async function requestBrowserLocation() {
   }
 
   state.isLocating = true;
-  state.locationStatus = "正在向瀏覽器要求 GPS 權限，會等待最多 20 秒取得更精準的位置...";
+  state.locationStatus = "正在向瀏覽器要求 GPS 權限，最多等待 20 秒取得較精準的位置...";
   render();
 
   try {
@@ -126,7 +173,7 @@ async function requestBrowserLocation() {
     };
     state.locationStatus = accuracy <= MAX_SEARCH_ACCURACY_METERS
       ? `已取得 GPS 位置，精準度約 ${accuracy} 公尺。`
-      : `目前只能取得約 ${accuracy} 公尺的粗略定位，還不適合搜尋附近餐廳；請確認手機定位/Wi-Fi 已開啟，或移到較空曠處再重試。`;
+      : `目前只能取得約 ${accuracy} 公尺的粗略定位，暫停 Google Places 搜尋以避免推薦到錯誤區域。`;
 
     refreshSelection();
 
@@ -152,14 +199,16 @@ async function saveApiKeyAndSearch(event) {
 
   if (!state.apiKeyDraft) {
     state.source = "sample";
-    state.restaurants = sampleRestaurants;
+    state.restaurants = sampleRestaurants.map(normalizeRestaurant);
     state.placesStatus = "已清除 API key，目前回到 MVP 假資料。";
+    state.mapStatus = "設定 Google Maps API key 後會顯示真正的 Google Map。";
     refreshSelection();
     render();
     return;
   }
 
-  state.placesStatus = "已保存 API key，正在嘗試搜尋目前位置附近餐廳。";
+  state.placesStatus = "已儲存 API key，正在嘗試搜尋目前位置附近餐廳。";
+  state.mapStatus = "正在準備 Google Map...";
   render();
   await loadPlacesForCurrentLocation();
 }
@@ -168,7 +217,7 @@ async function loadPlacesForCurrentLocation() {
   if (!canSearchWithCurrentLocation()) {
     state.placesStatus = state.locationAccuracy === null
       ? "請先取得 GPS 位置，再搜尋 Google Places 附近餐廳。"
-      : `定位精準度約 ${state.locationAccuracy} 公尺，超過 ${MAX_SEARCH_ACCURACY_METERS} 公尺門檻，暫停 Google Places 搜尋以避免推薦到錯的區域。`;
+      : `定位精準度約 ${state.locationAccuracy} 公尺，超過 ${MAX_SEARCH_ACCURACY_METERS} 公尺門檻，暫停 Google Places 搜尋。`;
     render();
     return;
   }
@@ -186,11 +235,12 @@ async function loadPlacesForCurrentLocation() {
     }
 
     state.source = "google";
-    state.restaurants = googleRestaurants;
+    state.restaurants = googleRestaurants.map(normalizeRestaurant);
     state.category = "全部";
     state.query = "";
     state.placesStatus = `已從 Google Places 取得 ${googleRestaurants.length} 間附近餐廳。`;
     refreshSelection();
+    if (state.selected) void loadRestaurantDetail(state.selected);
   } catch (error) {
     state.placesStatus = error instanceof Error ? error.message : "Google Places 搜尋失敗。";
   } finally {
@@ -201,7 +251,7 @@ async function loadPlacesForCurrentLocation() {
 
 function useSampleData() {
   state.source = "sample";
-  state.restaurants = sampleRestaurants;
+  state.restaurants = sampleRestaurants.map(normalizeRestaurant);
   state.category = "全部";
   state.query = "";
   state.placesStatus = "已切回 MVP 假資料。";
@@ -225,7 +275,7 @@ function render() {
       <div class="hero-copy">
         <span class="eyebrow">FoodMap Web</span>
         <h1>用你的 GPS 找附近可以吃的店。</h1>
-        <p>部署到 HTTPS 後，瀏覽器可以要求定位權限；設定 Google Maps API key 後，就能把推薦來源從假資料切換成 Google Places 附近餐廳。</p>
+        <p>取得定位並設定 Google Maps API key 後，推薦來源會從假資料切換成 Google Places，地圖、照片、評論和價位也會使用 Google 資料。</p>
       </div>
       ${setupPanelTemplate()}
     </section>
@@ -244,6 +294,7 @@ function render() {
   `;
 
   bindEvents();
+  void hydrateGoogleMap(selected, candidates);
 }
 
 function setupPanelTemplate() {
@@ -258,8 +309,8 @@ function setupPanelTemplate() {
       </div>
 
       <div class="status-stack">
-        <p>${state.locationStatus}</p>
-        <p>${state.placesStatus}</p>
+        <p>${escapeHtml(state.locationStatus)}</p>
+        <p>${escapeHtml(state.placesStatus)}</p>
       </div>
 
       <button class="primary-button full-width" id="locate" type="button" ${state.isLocating ? "disabled" : ""}>
@@ -278,7 +329,7 @@ function setupPanelTemplate() {
           />
         </label>
         <button class="secondary-button full-width" type="submit" ${state.isSearchingPlaces ? "disabled" : ""}>
-          ${state.isSearchingPlaces ? "搜尋中..." : "保存並搜尋附近餐廳"}
+          ${state.isSearchingPlaces ? "搜尋中..." : "儲存並搜尋附近餐廳"}
         </button>
       </form>
     </section>
@@ -295,7 +346,7 @@ function filterTemplate() {
       <label class="select-box">
         <span>類型</span>
         <select name="category">
-          ${categories().map((category) => `<option value="${category}" ${category === state.category ? "selected" : ""}>${category}</option>`).join("")}
+          ${categories().map((category) => `<option value="${escapeHtml(category)}" ${category === state.category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}
         </select>
       </label>
       <label class="toggle-box">
@@ -312,27 +363,27 @@ function recommendationTemplate(restaurant) {
 
   return `
     <article class="recommendation-card">
-      <img src="${restaurant.image}" alt="${restaurant.name} 招牌餐點" />
+      <img src="${escapeHtml(restaurant.image)}" alt="${escapeHtml(restaurant.name)} 招牌餐點" />
       <div class="recommendation-content">
         <div class="section-title">
           <span>最佳推薦</span>
           <strong>${restaurantScore} 分</strong>
         </div>
-        <h2>${restaurant.name}</h2>
-        <p>${restaurant.category} / ${restaurant.signature}</p>
+        <h2>${escapeHtml(restaurant.name)}</h2>
+        <p>${escapeHtml(restaurant.category)} / ${escapeHtml(restaurant.signature)}</p>
         <div class="metrics">
-          <span><b>${restaurant.rating.toFixed(1)}</b> 評分</span>
-          <span><b>${restaurant.reviews.toLocaleString()}</b> 則評論</span>
+          <span><b>${formatRating(restaurant.rating)}</b> 評分</span>
+          <span><b>${Number(restaurant.reviews ?? 0).toLocaleString()}</b> 則評論</span>
           <span><b>${formatDistance(restaurant)}</b> 距離</span>
-          <span><b>${restaurant.walkMinutes}</b> 分鐘步行</span>
+          <span><b>${formatGooglePriceLevel(restaurant.priceLevel)}</b> 平均價位</span>
         </div>
         <div class="status-line">
           <span class="${restaurant.open === false ? "is-closed" : "is-open"}">${openLabel}</span>
-          <span>${restaurant.closesAt}</span>
-          <span>${restaurant.price}</span>
+          <span>${escapeHtml(restaurant.closesAt)}</span>
+          <span>${escapeHtml(restaurant.price)}</span>
         </div>
         <div class="tag-row">
-          ${(restaurant.tags ?? []).map((tag) => `<span>${tag}</span>`).join("")}
+          ${(restaurant.tags ?? []).map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
         </div>
         <div class="actions">
           <button class="primary-button" id="accept" type="button">查看店家</button>
@@ -344,39 +395,31 @@ function recommendationTemplate(restaurant) {
 }
 
 function mapTemplate(selected, candidates) {
-  const pins = candidates.slice(0, 8).map((restaurant, index) => {
-    const position = pinPosition(restaurant, index);
-    const isSelected = restaurant.id === selected?.id;
-    return `
-      <button
-        class="map-pin ${isSelected ? "selected" : ""}"
-        style="left: ${position.left}%; top: ${position.top}%;"
-        type="button"
-        data-restaurant="${restaurant.id}"
-        aria-label="選擇 ${restaurant.name}"
-      >
-        <span>${index + 1}</span>
-      </button>
-    `;
-  }).join("");
+  const hasKey = hasGoogleMapsApiKey();
 
   return `
-    <section class="map-section" aria-label="附近餐廳地圖示意">
+    <section class="map-section" aria-label="附近餐廳 Google Map">
       <div class="map-header">
         <div>
           <span class="eyebrow">附近範圍</span>
-          <h3>${locationLabel(state.userLocation)}</h3>
+          <h3>${escapeHtml(locationLabel(state.userLocation))}</h3>
         </div>
         <strong>${candidates.length} 間候選</strong>
       </div>
-      <div class="map-canvas">
-        <span class="map-label station">目前位置</span>
-        <span class="map-label city">${state.source === "google" ? "Google Places" : "新竹市中心"}</span>
-        <span class="map-label mall">附近餐廳</span>
-        <span class="user-dot" aria-label="目前位置"></span>
-        ${pins}
+      <div class="google-map-canvas" id="google-map" role="application" aria-label="Google Map">
+        ${hasKey ? `<span class="map-loading">正在載入 Google Map...</span>` : mapFallbackTemplate()}
       </div>
+      <p class="map-note">${escapeHtml(state.mapStatus)}</p>
     </section>
+  `;
+}
+
+function mapFallbackTemplate() {
+  return `
+    <div class="map-fallback">
+      <strong>尚未啟用 Google Map</strong>
+      <span>貼上 Google Maps API key 並取得定位後，這裡會顯示真正的地圖與店家標記。</span>
+    </div>
   `;
 }
 
@@ -385,12 +428,12 @@ function nearbyTemplate(candidates, selected) {
     const openLabel = restaurant.open === true ? "營業中" : restaurant.open === false ? "休息" : "未知";
 
     return `
-      <button class="restaurant-row ${restaurant.id === selected?.id ? "active" : ""}" type="button" data-restaurant="${restaurant.id}">
+      <button class="restaurant-row ${restaurant.id === selected?.id ? "active" : ""}" type="button" data-restaurant="${escapeHtml(restaurant.id)}">
         <span class="rank">${index + 1}</span>
-        <img src="${restaurant.image}" alt="${restaurant.name}" />
+        <img src="${escapeHtml(restaurant.image)}" alt="${escapeHtml(restaurant.name)}" />
         <span class="restaurant-copy">
-          <b>${restaurant.name}</b>
-          <small>${restaurant.signature} / ${formatDistance(restaurant)} / ${restaurant.price}</small>
+          <b>${escapeHtml(restaurant.name)}</b>
+          <small>${escapeHtml(restaurant.signature)} / ${formatDistance(restaurant)} / ${formatGooglePriceLevel(restaurant.priceLevel)}</small>
         </span>
         <span class="${restaurant.open === false ? "closed-copy" : "open-copy"}">${openLabel}</span>
       </button>
@@ -413,30 +456,64 @@ function nearbyTemplate(candidates, selected) {
 function detailTemplate(restaurant) {
   if (!restaurant) return "";
 
+  const photos = restaurant.photos?.length ? restaurant.photos : [restaurant.image].filter(Boolean);
+  const reviews = restaurant.reviewItems?.length
+    ? restaurant.reviewItems
+    : restaurant.review
+      ? [{
+          id: `${restaurant.id}-sample-review`,
+          author: restaurant.review.author,
+          rating: restaurant.review.rating,
+          time: restaurant.review.time,
+          text: restaurant.review.text
+        }]
+      : [];
+  const mapsUrl = buildGoogleMapsUrl(restaurant);
+
   return `
     <section class="detail-card">
       <div class="card-heading">
         <h3>店家詳情</h3>
-        <span>${restaurant.category}</span>
+        <span>${escapeHtml(restaurant.category)}</span>
       </div>
+      ${restaurant.detailLoading ? `<p class="detail-status">正在載入 Google Place Details...</p>` : ""}
+      ${restaurant.detailError ? `<p class="detail-error">${escapeHtml(restaurant.detailError)}</p>` : ""}
       <div class="photo-strip">
-        ${restaurant.photos.map((photo) => `<img src="${photo}" alt="${restaurant.name} 照片" />`).join("")}
+        ${photos.map((photo) => `<img src="${escapeHtml(photo)}" alt="${escapeHtml(restaurant.name)} 照片" />`).join("")}
       </div>
       <div class="detail-grid">
-        <span><b>${restaurant.rating.toFixed(1)}</b> 星評分</span>
-        <span><b>${restaurant.reviews.toLocaleString()}</b> 則評論</span>
-        <span><b>${restaurant.walkMinutes}</b> 分鐘步行</span>
-        <span><b>${restaurant.closesAt}</b> 資訊</span>
+        <span><b>${formatRating(restaurant.rating)}</b> 星評分</span>
+        <span><b>${Number(restaurant.reviews ?? 0).toLocaleString()}</b> 則評論</span>
+        <span><b>${formatGooglePriceLevel(restaurant.priceLevel)}</b> 平均價位</span>
+        <span><b>${restaurant.open === true ? "營業中" : restaurant.open === false ? "休息" : "未知"}</b> 營業狀態</span>
       </div>
-      <article class="review-card">
-        <div class="avatar">${restaurant.review.author.slice(0, 1)}</div>
-        <div>
-          <strong>${restaurant.review.author}</strong>
-          <span>${restaurant.review.rating.toFixed(1)} 星 / ${restaurant.review.time}</span>
-          <p>${restaurant.review.text}</p>
-        </div>
-      </article>
+      <div class="detail-info">
+        <p>${escapeHtml(restaurant.address ?? restaurant.signature ?? "Google 尚未提供地址。")}</p>
+        ${restaurant.phone ? `<a href="tel:${escapeHtml(restaurant.phone)}">${escapeHtml(restaurant.phone)}</a>` : ""}
+        ${restaurant.website ? `<a href="${escapeHtml(restaurant.website)}" target="_blank" rel="noopener noreferrer">官方網站</a>` : ""}
+        <a href="${escapeHtml(mapsUrl)}" target="_blank" rel="noopener noreferrer">在 Google Maps 開啟</a>
+      </div>
+      <div class="review-heading">
+        <h4>Google 最相關評論，最多 5 則</h4>
+        <span>Place Details 回傳限制</span>
+      </div>
+      ${reviews.length
+        ? reviews.map(reviewTemplate).join("")
+        : `<p class="empty-copy">Google 目前沒有提供可顯示評論。</p>`}
     </section>
+  `;
+}
+
+function reviewTemplate(review) {
+  return `
+    <article class="review-card">
+      <div class="avatar">${escapeHtml(String(review.author ?? "G").slice(0, 1))}</div>
+      <div>
+        <strong>${escapeHtml(review.author ?? "Google 使用者")}</strong>
+        <span>${formatRating(review.rating)} 星 / ${escapeHtml(review.time ?? "時間未知")}</span>
+        <p>${escapeHtml(review.text ?? "")}</p>
+      </div>
+    </article>
   `;
 }
 
@@ -479,6 +556,36 @@ function bindEvents() {
   document.querySelectorAll("[data-restaurant]").forEach((button) => {
     button.addEventListener("click", () => selectRestaurant(button.dataset.restaurant));
   });
+}
+
+async function hydrateGoogleMap(selected, candidates) {
+  const element = document.querySelector("#google-map");
+  if (!element) return;
+
+  if (!hasGoogleMapsApiKey()) {
+    state.mapStatus = "設定 Google Maps API key 後會顯示真正的 Google Map。";
+    return;
+  }
+
+  const token = ++mapRenderToken;
+
+  try {
+    element.textContent = "";
+    await renderGoogleRestaurantMap(element, {
+      userLocation: state.userLocation,
+      restaurants: candidates,
+      selectedRestaurant: selected,
+      onSelect: (id) => selectRestaurant(id)
+    });
+    if (token !== mapRenderToken) return;
+    state.mapStatus = "已載入 Google Map；點選標記會自動開啟 Google Maps 店家頁。";
+    document.querySelector(".map-note").textContent = state.mapStatus;
+  } catch (error) {
+    if (token !== mapRenderToken) return;
+    state.mapStatus = error instanceof Error ? error.message : "Google Map 載入失敗。";
+    element.innerHTML = mapFallbackTemplate();
+    document.querySelector(".map-note").textContent = state.mapStatus;
+  }
 }
 
 function getBestCurrentPosition() {
@@ -535,27 +642,44 @@ function locationErrorMessage(error) {
   return "取得定位失敗，暫時保留預設位置。";
 }
 
+function normalizeRestaurant(restaurant) {
+  const reviewItems = restaurant.reviewItems ?? (
+    restaurant.review
+      ? [{
+          id: `${restaurant.id}-review`,
+          author: restaurant.review.author,
+          rating: restaurant.review.rating,
+          time: restaurant.review.time,
+          text: restaurant.review.text
+        }]
+      : []
+  );
+
+  return {
+    ...restaurant,
+    priceLevel: restaurant.priceLevel ?? priceLevelFromLabel(restaurant.price),
+    googleMapsUrl: restaurant.googleMapsUrl ?? buildGoogleMapsUrl(restaurant),
+    reviewItems
+  };
+}
+
+function priceLevelFromLabel(price) {
+  if (!price) return null;
+  const level = String(price).replace("NT", "").length;
+  return level > 0 ? level : null;
+}
+
 function formatDistance(restaurant) {
   const meters = distanceMeters(state.userLocation, { lat: restaurant.lat, lng: restaurant.lng });
   return `${Math.round(meters)} 公尺`;
 }
 
-function pinPosition(restaurant, index) {
-  const left = 50 + (restaurant.lng - state.userLocation.lng) * 2300 + index * 2;
-  const top = 52 - (restaurant.lat - state.userLocation.lat) * 2300 + index * 1.5;
-
-  return {
-    left: clamp(left, 12, 88),
-    top: clamp(top, 14, 84)
-  };
-}
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
+function formatRating(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(1) : "--";
 }
 
 function escapeHtml(value) {
-  return value
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

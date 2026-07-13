@@ -401,6 +401,51 @@ button {
   background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px, auto;
 }
 
+.google-map-canvas {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 380px;
+  overflow: hidden;
+  border: 1px solid #d4ddd8;
+  border-radius: 8px;
+  background: #edf3ea;
+}
+
+.map-loading,
+.map-note {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.map-note {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.map-fallback {
+  display: grid;
+  gap: 8px;
+  width: min(320px, calc(100% - 32px));
+  padding: 18px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.map-fallback strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.map-fallback span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .map-canvas::after {
   content: "";
   position: absolute;
@@ -580,6 +625,75 @@ button {
   border-radius: 6px;
 }
 
+.detail-status,
+.detail-error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.detail-status {
+  color: #465059;
+  background: var(--quiet);
+  border: 1px solid #e5e9e5;
+}
+
+.detail-error {
+  color: var(--accent-dark);
+  background: rgba(232, 66, 66, 0.08);
+  border: 1px solid rgba(232, 66, 66, 0.22);
+}
+
+.detail-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.detail-info p {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+  color: #3f464d;
+  line-height: 1.55;
+}
+
+.detail-info a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 11px;
+  color: var(--blue);
+  background: #fff;
+  border: 1px solid rgba(33, 103, 199, 0.28);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.review-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.review-heading h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.review-heading span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .review-card {
   display: grid;
   grid-template-columns: 42px 1fr;
@@ -670,6 +784,10 @@ button {
 
   .map-canvas {
     height: 300px;
+  }
+
+  .google-map-canvas {
+    min-height: 320px;
   }
 }
 
